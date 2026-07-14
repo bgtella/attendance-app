@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "deploy": "npm run build && gh-pages -d dist"
+    "deploy": "npm run build && node -e \"require('gh-pages').publish('dist', {repo:'https://github.com/bgtella/attendance-app.git',branch:'gh-pages',message:'Deploy: update build'}, (err)=>{ if(err){console.error(err);process.exit(1)}else{console.log('Published!')} })\""
   },
   "dependencies": {
     "react": "^18.3.1",
