@@ -39,6 +39,25 @@ export const fetchRoster = async () => {
 };
 
 /**
+ * Fetches saved attendance rows for a specific date from the Attendance sheet.
+ * Returns an array of row objects keyed by the Attendance sheet headers.
+ * Used to reload a past session for editing (README objective #9).
+ */
+export const fetchAttendance = async (date) => {
+  if (!APPS_SCRIPT_URL) throw new Error('VITE_APPS_SCRIPT_URL is not configured.');
+
+  const url = `${APPS_SCRIPT_URL}?action=getAttendance&date=${encodeURIComponent(date)}`;
+  const response = await fetch(url);
+
+  if (!response.ok) throw new Error(`Failed to fetch attendance: ${response.status}`);
+
+  const data = await response.json();
+  if (data.error) throw new Error(data.error);
+
+  return data; // raw rows — mapped in useAttendance
+};
+
+/**
  * Saves attendance rows to the Attendance sheet via a POST request.
  * Payload shape per row: { date, cluster, household, firstName, lastName, type, status, timestamp }
  * Uses no-cors mode — response body is opaque but the post still lands.

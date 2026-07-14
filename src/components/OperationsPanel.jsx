@@ -5,7 +5,10 @@ export default function OperationsPanel({
   onLoadBackup,
   onUploadRoster,
   onResetRoster,
+  onLoadPastDate,
+  onNewSession,
   isSyncing,
+  isLoadingPast,
 }) {
   return (
     <div className="pt-6 border-t border-slate-100 space-y-2.5">
@@ -37,6 +40,22 @@ export default function OperationsPanel({
         {isSyncing ? 'Syncing...' : 'Save to Google Sheets'}
       </button>
 
+      {/* Load Past Date from Sheets */}
+      <button
+        onClick={onLoadPastDate}
+        disabled={isLoadingPast}
+        className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition-colors border text-sm ${
+          isLoadingPast
+            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+            : 'bg-violet-50 text-violet-700 hover:bg-violet-100 border-violet-100 shadow-xs'
+        }`}
+      >
+        <svg className={`w-4 h-4 ${isLoadingPast ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        {isLoadingPast ? 'Loading...' : 'Load & Edit Past Date'}
+      </button>
+
       {/* Export CSV Backup */}
       <button
         onClick={onExportCSV}
@@ -65,6 +84,15 @@ export default function OperationsPanel({
         Upload Master Roster
         <input type="file" accept=".csv" onChange={onUploadRoster} className="hidden" />
       </label>
+
+      {/* New Session — clear all attendance */}
+      <button
+        type="button"
+        onClick={onNewSession}
+        className="w-full text-center text-xs text-rose-400 hover:text-rose-600 py-1 font-bold transition-colors block border-t border-slate-100 pt-3"
+      >
+        🗑 New Session (Clear Attendance)
+      </button>
 
       {/* Restore Original Roster */}
       <button

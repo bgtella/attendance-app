@@ -5,9 +5,10 @@
 // ============================================================
 
 const KEYS = {
-  ROSTER: 'sol_roster_v6',
-  ATTENDANCE: 'sol_attendance_v1',
+  ROSTER:       'sol_roster_v6',
+  ATTENDANCE:   'sol_attendance_v1',
   MEETING_DATE: 'sol_meeting_date_v1',
+  ATTENDANCE_DATE: 'sol_attendance_date_v1', // tracks which date the stored attendance belongs to
 };
 
 const safeGet = (key) => {
@@ -35,7 +36,14 @@ export const clearRoster = () => localStorage.removeItem(KEYS.ROSTER);
 // --- Attendance ---
 export const getAttendance = () => safeGet(KEYS.ATTENDANCE) || {};
 export const saveAttendance = (data) => safeSet(KEYS.ATTENDANCE, data);
-export const clearAttendance = () => localStorage.removeItem(KEYS.ATTENDANCE);
+export const clearAttendance = () => {
+  localStorage.removeItem(KEYS.ATTENDANCE);
+  localStorage.removeItem(KEYS.ATTENDANCE_DATE);
+};
+
+// --- Attendance Date (tracks which date the stored attendance belongs to) ---
+export const getAttendanceDate = () => safeGet(KEYS.ATTENDANCE_DATE);
+export const saveAttendanceDate = (date) => safeSet(KEYS.ATTENDANCE_DATE, date);
 
 // --- Meeting Date ---
 export const getMeetingDate = () => safeGet(KEYS.MEETING_DATE);

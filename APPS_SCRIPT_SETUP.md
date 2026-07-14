@@ -43,10 +43,47 @@ script with the following. Keep your existing `doPost` handler intact — only a
 
 ```javascript
 // ============================================================
-// doGet — serves the Members roster as JSON
-// Called by the app at: ?action=getRoster
+// doGet — serves the Members roster OR a past attendance record
+// Actions:
+//   ?action=getRoster
+//   ?action=getAttendance&date=2025-01-15
 // ============================================================
 function doGet(e) {
+
+  // ── getAttendance: return all rows for a specific date ──
+  if (e.parameter.action === 'getAttendance') {
+    try {
+      var date = e.parameter.date;
+      if (!date) {
+        return ContentService
+          .createTextOutput(JSON.stringify({ error: 'Missing date parameter' }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Attendance');
+      var data = sheet.getDataRange().getValues();
+      var headers = data[0]; // Date,Cluster,Household,Last Name,First Name,Type,Status,Timestamp
+
+      var rows = data.slice(1).filter(function(row) {
+        return String(row[0]) === String(date);
+      }).map(function(row) {
+        var obj = {};
+        headers.forEach(function(h, i) { obj[h] = row[i]; });
+        return obj;
+      });
+
+      return ContentService
+        .createTextOutput(JSON.stringify(rows))
+        .setMimeType(ContentService.MimeType.JSON);
+
+    } catch (err) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ error: err.message }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  // ── getRoster: return all members ──
   if (e.parameter.action === 'getRoster') {
     try {
       var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Members');

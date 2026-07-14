@@ -9,6 +9,11 @@ import { useState, useCallback } from 'react';
 import * as storageService from '../services/storageService';
 import * as sheetsService from '../services/sheetsService';
 
+// Column name constants matching the Attendance sheet headers
+const COL_LAST_NAME  = 'Last Name';
+const COL_FIRST_NAME = 'First Name';
+const COL_STATUS     = 'Status';
+
 export const useAttendance = () => {
   // Restore last saved attendance state from localStorage
   const [attendance, setAttendanceState] = useState(() => storageService.getAttendance());
@@ -16,10 +21,12 @@ export const useAttendance = () => {
   const [syncError, setSyncError] = useState(null);
 
   // Persist every toggle immediately (README objective #8)
-  const setAttendance = useCallback((updater) => {
+  // attendanceDate is passed in so we know which date this attendance belongs to
+  const setAttendance = useCallback((updater, date) => {
     setAttendanceState((prev) => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       storageService.saveAttendance(next);
+      if (date) storageService.saveAttendanceDate(date);
       return next;
     });
   }, []);
@@ -38,6 +45,53 @@ export const useAttendance = () => {
     storageService.clearAttendance();
     setAttendanceState({});
   }, []);
+
+  /**
+   * Loads a previously saved attendance record from Google Sheets for a specific date.
+   * Matches each returned row back to a member in the current roster by firstName + lastName.
+   * Returns { matched, total } counts so the UI can show a summary.
+   * README objective #9 — edit attendance after saving.
+   */
+  const loadAttendanceFromSheets = useCallback(
+    async (members, date) => {
+      if (!navigator.onLine) {
+        throw new Error('You are offline. Cannot load from Google Sheets.');
+      }
+
+      const rows = await sheetsService.fetchAttendance(date);
+
+      if (!rows || rows.length === 0) {
+        throw new Error(`No attendance record found for ${date}.`);
+      }
+
+      // Build a lookup: "LASTNAME|FIRSTNAME" → status value
+      const statusMap = {};
+      rows.forEach((row) => {
+        const last  = String(row[COL_LAST_NAME]  || '').toUpperCase().trim();
+        const first = String(row[COL_FIRST_NAME] || '').toUpperCase().trim();
+        const status = String(row[COL_STATUS] || '');
+        statusMap[`${last}|${first}`] = status;
+      });
+
+      // Match each roster member back by name and rebuild attendance state
+      const rebuilt = {};
+      let matched = 0;
+
+      members.forEach((m) => {
+        const key = `${(m.lastName || '').toUpperCase().trim()}|${(m.firstName || '').toUpperCase().trim()}`;
+        if (key in statusMap) {
+          // Treat any truthy / '1' / 'Present' value as present
+          const val = statusMap[key];
+          rebuilt[m.id] = val === '1' || val.toLowerCase() === 'present' || val === true;
+          matched++;
+        }
+      });
+
+      setAttendance(rebuilt);
+      return { matched, total: rows.length };
+    },
+    [setAttendance]
+  );
 
   /**
    * Sync attendance to Google Sheets.
@@ -90,6 +144,7 @@ export const useAttendance = () => {
     toggleAttendance,
     clearAttendance,
     syncToSheets,
+    loadAttendanceFromSheets,
     isSyncing,
     syncError,
     totalPresent,

@@ -32,15 +32,32 @@ function App() {
   }, [activeCluster, CLUSTER_HH_MAP]);
 
   // --- Attendance ---
-  const { attendance, setAttendance, toggleAttendance, clearAttendance, syncToSheets, isSyncing, totalPresent } = useAttendance();
+  const { attendance, setAttendance, toggleAttendance, clearAttendance, syncToSheets, loadAttendanceFromSheets, isSyncing, totalPresent } = useAttendance();
+
+  // Loading state for the "Load Past Date" action
+  const [isLoadingPast, setIsLoadingPast] = useState(false);
 
   // --- Meeting Date (persisted) ---
   const [meetingDate, setMeetingDateState] = useState(
     () => storageService.getMeetingDate() || new Date().toISOString().split('T')[0]
   );
-  const setMeetingDate = (date) => {
-    setMeetingDateState(date);
-    storageService.saveMeetingDate(date);
+
+  // When date changes: if there is unsaved attendance for a DIFFERENT date,
+  // ask the admin to confirm before clearing — prevents accidental carry-over.
+  const setMeetingDate = (newDate) => {
+    const storedAttDate = storageService.getAttendanceDate();
+    const hasAttendance = Object.values(storageService.getAttendance()).some(Boolean);
+
+    if (hasAttendance && storedAttDate && storedAttDate !== newDate) {
+      const confirmed = window.confirm(
+        `You have unsaved attendance for ${storedAttDate}.\n\nSwitching to ${newDate} will clear the current session.\n\nContinue?`
+      );
+      if (!confirmed) return; // user cancelled — keep current date
+      clearAttendance();
+    }
+
+    setMeetingDateState(newDate);
+    storageService.saveMeetingDate(newDate);
   };
 
   // --- Toast Notifications ---
@@ -59,6 +76,20 @@ function App() {
   useEffect(() => {
     if (rosterError) showToast(`Roster: ${rosterError} — using cached data.`, 'error');
   }, [rosterError, showToast]);
+
+  // On app load: warn if stored attendance belongs to a different date than today's date
+  useEffect(() => {
+    const storedAttDate = storageService.getAttendanceDate();
+    const hasAttendance = Object.values(storageService.getAttendance()).some(Boolean);
+    const today = new Date().toISOString().split('T')[0];
+
+    if (hasAttendance && storedAttDate && storedAttDate !== today) {
+      showToast(
+        `Session restored from ${storedAttDate}. Change the date or click "New Session" to start fresh.`,
+        'error'
+      );
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Guest Form State ---
   const [showGuestForm, setShowGuestForm] = useState(false);
@@ -91,10 +122,32 @@ function App() {
     showToast(`Successfully registered and checked in guest ${newGuest.name}!`, 'success');
   };
 
+  // --- Load Past Date from Google Sheets (for editing) ---
+  const handleLoadPastDate = async () => {
+    if (!meetingDate) {
+      showToast('Please select a date in the date picker first.', 'error');
+      return;
+    }
+    setIsLoadingPast(true);
+    try {
+      const { matched, total } = await loadAttendanceFromSheets(members, meetingDate);
+      showToast(
+        `Loaded attendance for ${meetingDate}. ${matched} of ${total} records matched. Make changes and re-save.`,
+        'success'
+      );
+    } catch (err) {
+      showToast(err.message || 'Failed to load past attendance.', 'error');
+    } finally {
+      setIsLoadingPast(false);
+    }
+  };
+
   // --- Sync to Google Sheets ---
   const handleSyncToSheets = async () => {
     try {
       await syncToSheets(members, meetingDate);
+      // Record which date was just synced so we can detect stale sessions later
+      storageService.saveAttendanceDate(meetingDate);
       showToast('Attendance successfully synced to Google Sheets!', 'success');
     } catch (err) {
       showToast(err.message || 'Sync failed. Export CSV backup first.', 'error');
@@ -148,6 +201,13 @@ function App() {
     };
     reader.readAsText(file);
     e.target.value = null;
+  };
+
+  // --- New Session (clear attendance for a fresh start) ---
+  const handleNewSession = () => {
+    if (!window.confirm(`Clear all attendance for ${meetingDate} and start a new session?`)) return;
+    clearAttendance();
+    showToast('Session cleared. Ready for a new attendance entry.', 'success');
   };
 
   // --- Reset Roster ---
@@ -206,7 +266,10 @@ function App() {
               onLoadBackup={handleLoadBackup}
               onUploadRoster={handleUploadRoster}
               onResetRoster={handleResetRoster}
+              onLoadPastDate={handleLoadPastDate}
+              onNewSession={handleNewSession}
               isSyncing={isSyncing}
+              isLoadingPast={isLoadingPast}
             />
           </div>
 
