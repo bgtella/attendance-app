@@ -7,5 +7,5 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
-  base: './',
+  base: './solpg-attendance-app/',
 })
