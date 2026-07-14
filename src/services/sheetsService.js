@@ -42,6 +42,9 @@ export const fetchRoster = async () => {
  * Fetches saved attendance rows for a specific date from the Attendance sheet.
  * Returns an array of row objects keyed by the Attendance sheet headers.
  * Used to reload a past session for editing (README objective #9).
+ *
+ * The Apps Script returns: { rows: [...], debug_target: "YYYY-MM-DD", debug_total: N }
+ * We log the debug info to the console so it's visible in DevTools if matching fails.
  */
 export const fetchAttendance = async (date) => {
   if (!APPS_SCRIPT_URL) throw new Error('VITE_APPS_SCRIPT_URL is not configured.');
@@ -54,7 +57,18 @@ export const fetchAttendance = async (date) => {
   const data = await response.json();
   if (data.error) throw new Error(data.error);
 
-  return data; // raw rows — mapped in useAttendance
+  // Log debug info so mismatches are visible in browser DevTools → Console
+  if (data.debug_target !== undefined) {
+    console.log(
+      `[fetchAttendance] Looking for date: "${data.debug_target}" | ` +
+      `Total rows in sheet: ${data.debug_total} | ` +
+      `Matched rows: ${(data.rows || []).length}`
+    );
+    return data.rows || [];
+  }
+
+  // Fallback: old script returns a plain array
+  return Array.isArray(data) ? data : [];
 };
 
 /**

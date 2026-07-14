@@ -43,6 +43,28 @@ script with the following. Keep your existing `doPost` handler intact — only a
 
 ```javascript
 // ============================================================
+// toYMD — normalises any date value to "YYYY-MM-DD" string
+// Handles: JS Date objects, date serials, "M/D/YYYY", "YYYY-MM-DD"
+// ============================================================
+function toYMD(val) {
+  if (!val) return '';
+  var d;
+  if (val instanceof Date) {
+    d = val;
+  } else if (typeof val === 'number') {
+    // Google Sheets date serial: days since 30 Dec 1899
+    d = new Date(Math.round((val - 25569) * 86400 * 1000));
+  } else {
+    d = new Date(String(val).trim());
+  }
+  if (isNaN(d.getTime())) return String(val).trim(); // fallback: return as-is
+  var y  = d.getFullYear();
+  var mo = String(d.getMonth() + 1).padStart(2, '0');
+  var dy = String(d.getDate()).padStart(2, '0');
+  return y + '-' + mo + '-' + dy;
+}
+
+// ============================================================
 // doGet — serves the Members roster OR a past attendance record
 // Actions:
 //   ?action=getRoster
@@ -60,20 +82,29 @@ function doGet(e) {
           .setMimeType(ContentService.MimeType.JSON);
       }
 
+      // Normalise the incoming date to YYYY-MM-DD for comparison
+      // e.g. "2025-07-04" stays as-is
+      var normTarget = toYMD(date);
+
       var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Attendance');
       var data = sheet.getDataRange().getValues();
       var headers = data[0]; // Date,Cluster,Household,Last Name,First Name,Type,Status,Timestamp
 
       var rows = data.slice(1).filter(function(row) {
-        return String(row[0]) === String(date);
+        // row[0] may be a Date object, a number, or a string depending on how Sheets stored it
+        return toYMD(row[0]) === normTarget;
       }).map(function(row) {
         var obj = {};
-        headers.forEach(function(h, i) { obj[h] = row[i]; });
+        headers.forEach(function(h, i) {
+          // Trim header keys to avoid whitespace mismatches
+          obj[String(h).trim()] = row[i];
+        });
         return obj;
       });
 
+      // Also return a debug field so the app can show what was found
       return ContentService
-        .createTextOutput(JSON.stringify(rows))
+        .createTextOutput(JSON.stringify({ rows: rows, debug_target: normTarget, debug_total: data.length - 1 }))
         .setMimeType(ContentService.MimeType.JSON);
 
     } catch (err) {

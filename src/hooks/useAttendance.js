@@ -73,6 +73,9 @@ export const useAttendance = () => {
         statusMap[`${last}|${first}`] = status;
       });
 
+      // Log the keys found in the sheet so you can compare with roster names in DevTools
+      console.log('[loadAttendanceFromSheets] Keys from sheet:', Object.keys(statusMap).slice(0, 5), '...');
+
       // Match each roster member back by name and rebuild attendance state
       const rebuilt = {};
       let matched = 0;
@@ -87,6 +90,7 @@ export const useAttendance = () => {
         }
       });
 
+      console.log(`[loadAttendanceFromSheets] Matched ${matched} of ${rows.length} rows from sheet.`);
       setAttendance(rebuilt);
       return { matched, total: rows.length };
     },
