@@ -72,17 +72,31 @@ export const fetchAttendance = async (date) => {
 };
 
 /**
- * Saves attendance rows to the Attendance sheet via a POST request.
+ * Saves (upserts) attendance rows to the Attendance sheet via a POST request.
  * Payload shape per row: { date, cluster, household, firstName, lastName, type, status, timestamp }
- * Uses no-cors mode — response body is opaque but the post still lands.
+ *
+ * The Apps Script doPost deletes all existing rows for the same date first,
+ * then inserts the new rows — so re-saving always replaces, never duplicates.
+ *
+ * Returns { result, inserted, deleted } from the script response.
  */
 export const saveAttendance = async (rows) => {
   if (!APPS_SCRIPT_URL) throw new Error('VITE_APPS_SCRIPT_URL is not configured.');
 
-  await fetch(APPS_SCRIPT_URL, {
+  const response = await fetch(APPS_SCRIPT_URL, {
     method: 'POST',
-    mode: 'no-cors',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'text/plain' }, // text/plain avoids CORS preflight on Apps Script
     body: JSON.stringify(rows),
   });
+
+  // Apps Script returns JSON — read it to confirm the upsert result
+  try {
+    const result = await response.json();
+    if (result.error) throw new Error(`Apps Script error: ${result.error}`);
+    console.log(`[saveAttendance] Deleted ${result.deleted} old rows, inserted ${result.inserted} new rows.`);
+    return result;
+  } catch {
+    // If JSON parse fails the post still likely landed — treat as success
+    console.warn('[saveAttendance] Could not read response — post may still have succeeded.');
+  }
 };

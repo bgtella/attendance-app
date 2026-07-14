@@ -147,28 +147,33 @@ function doGet(e) {
 }
 
 // ============================================================
-// doPost — receives and saves attendance rows
-// Called by the app when "Save to Google Sheets" is clicked
+// doPost — receives and saves attendance rows (upsert by date)
+// Called by the app when "Save to Google Sheets" is clicked.
+// Uses toYMD() to normalise dates so the delete step always works
+// regardless of how Sheets stored the original date value.
 // ============================================================
 function doPost(e) {
   try {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Attendance');
     var rows = JSON.parse(e.postData.contents);
 
-    // Upsert: delete existing rows for this date, then re-insert
-    // This supports re-editing attendance after saving (README objective #9)
+    var deleted = 0;
+
+    // Upsert: delete ALL existing rows for this date first, then re-insert fresh
     if (rows.length > 0) {
-      var dateToReplace = rows[0].date;
+      var normTarget = toYMD(rows[0].date); // normalise incoming date
       var data = sheet.getDataRange().getValues();
-      // Find and delete rows matching this date (iterate in reverse)
+
+      // Iterate in reverse so row indices stay valid as we delete
       for (var i = data.length - 1; i >= 1; i--) {
-        if (String(data[i][0]) === String(dateToReplace)) {
+        if (toYMD(data[i][0]) === normTarget) {
           sheet.deleteRow(i + 1);
+          deleted++;
         }
       }
     }
 
-    // Append new rows
+    // Append the updated rows
     rows.forEach(function(row) {
       sheet.appendRow([
         row.date,
@@ -183,13 +188,19 @@ function doPost(e) {
     });
 
     return ContentService
-      .createTextOutput(JSON.stringify({ result: 'success', count: rows.length }))
-      .setMimeType(ContentService.MimeType.JSON);
+      .createTextOutput(JSON.stringify({
+        result:   'success',
+        inserted: rows.length,
+        deleted:  deleted
+      }))
+      .setMimeType(ContentService.MimeType.JSON)
+      .setHeader('Access-Control-Allow-Origin', '*');
 
   } catch (err) {
     return ContentService
       .createTextOutput(JSON.stringify({ error: err.message }))
-      .setMimeType(ContentService.MimeType.JSON);
+      .setMimeType(ContentService.MimeType.JSON)
+      .setHeader('Access-Control-Allow-Origin', '*');
   }
 }
 ```
